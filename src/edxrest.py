@@ -2,12 +2,15 @@
 This is a set of scripts which help us make REST calls into edX Studio APIs.
 '''
 
+from datetime import datetime
 import json
 import os
 import os.path
 import requests
 import shutil
 import tempfile
+
+from collections import namedtuple
 
 # Sessions are stored in cookies. Each server can have its own cookie
 # for this. We just set all the possible ones.
@@ -28,19 +31,44 @@ baseline_cookies = {
 # Basic headers we need just to talk to edX
 baseline_headers = {
     "X-Requested-With": "XMLHttpRequest",
-    "Content-Type": "application/json; charset=UTF-8",
-    "User-Agent": "Mozilla/5.0 (Windows) AppleWebKit/500 (KHTML, like Gecko) Chrome/48.0.0.0 Safari/530.00",
-    
+    "User-Agent": "Mozilla/5.0 (Windows) AppleWebKit/500 (KHTML, like Gecko) Chrome/48.0.0.0 Safari/530.00",    
 }
 
 class DATA_FORMATS:
     AJAX = 'ajax'
 
-class EdXInstance(object):
+class EdXCourse(namedtuple("course_tuple", ["org", "course", "run"])):
+    '''
+    A helper class to manage edX course URL encoding.
+
+    >>> x=EdXCourse("edx", "edx101", "2000")
+    >>> print x.org
+    edx
+    >>> print x.course_string()
+    course-v1:edx+edx101+2000
+    '''
+    def course_string(self):
+        return "course-v1:{org}+{course}+{run}".format(org=self.org,
+                                                       course=self.course,
+                                                       run=self.run)
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+
+class EdXConnection(object):
     def __init__(self,
-                 sessionid,
-                 server):
-        self.sessionid = sessionid
+                 sessionid = None,
+                 server = "https://studio.edge.edx.org"):
+        '''
+        Initialize a connection to an edX instance. The key parameter is
+        session_id. This must be picked out from the network console
+        in developer tools in your web browser.
+        '''
+        if sessionid:
+            self.sessionid = sessionid
+        else:
+            self.sessionid = os.environ['OPEN_EDX_SESSION']
         self.server = server
 
     def compile_header(csrf = 'csrf_string',
@@ -74,11 +102,24 @@ class EdXInstance(object):
         if response_type == 'ajax':
             header["Accept"] = "application/json, text/javascript, */*; q=0.01"
         if request_type == 'ajax':
-            "Content-Type": "application/json; charset=UTF-8",
+            header["Content-Type"] = "application/json; charset=UTF-8",
 
         # And more CSRF protection -- we do need the referer
         header["Referer"] = self.server+ "/course",
         return (header, cookies)
+
+    def ajax(url, payload):
+        '''
+        Make an AJAX call. This expects both the request and response to be
+        JSON.
+        '''
+        (headers, cookies) = self.compile_header()
+        r = requests.post(self.server+url,
+                          data=json.dumps(payload),
+                          cookies=cookies,
+                          headers=headers)
+        print r.text
+        return json.loads(r.text)
 
     def create_course(course_name = 'Sample course',
                       course_org = 'edx',
@@ -88,25 +129,18 @@ class EdXInstance(object):
         Make a new edX course
         '''
         print "Creating", course_name
-        url = "https://studio.edge.edx.org/course/"
+        url = "/course/"
         payload = {"org": course_org,
                    "number": course_number,
                    "display_name": course_name,
                    "run": course_run}
-        (header, cookies) = compile_header()
-        r = requests.post(url,
-                          data=json.dumps(payload),
-                          cookies=cookies,
-                          headers=headers)
+        r = self.ajax(url, payload)
         print r.text
 
     def add_author_to_course(course_name,
                              author_email):
         print "Adding", author_email, "to", course_slug
-        url = "https://studio.edge.edx.org/course_team/course-v1:LAS+{course_slug}+2016/{author_email}"
-        url = url.format(course_slug = course_slug, author_email = author_email)
+        url = "course_team/{course}/{author_email}"
+        url = url.format(course = course, author_email = author_email)
         payload = {"role": "instructor"}
-        r = requests.post(url,
-                          data=json.dumps(payload),
-                          cookies=cookies,
-                          headers=headers)
+        r = requests.post(url, payload)
