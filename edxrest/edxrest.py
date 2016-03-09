@@ -59,9 +59,10 @@ class DATA_FORMATS:
     '''
     AJAX = 'ajax'
     TARBALL = 'tgz'
+    NONE = 'none'
 
 
-class EdXCourse(namedtuple("course_tuple", ["org", "course", "run"])):
+class EdXCourse(namedtuple("course_tuple", ["org", "number", "run"])):
     '''
     A helper class to manage edX course URL encoding.
 
@@ -72,8 +73,8 @@ class EdXCourse(namedtuple("course_tuple", ["org", "course", "run"])):
     course-v1:edx+edx101+2000
     '''
     def course_string(self):
-        return "course-v1:{org}+{course}+{run}".format(org=self.org,
-                                                       course=self.course,
+        return "course-v1:{org}+{number}+{run}".format(org=self.org,
+                                                       number=self.number,
                                                        run=self.run)
 
 if __name__ == "__main__":
@@ -126,7 +127,8 @@ class EdXConnection(object):
         # And we need appropriate content type headers both
         # for what we're sending and what we expect. This is
         # usually JSON, but it's sometimes files.
-        if response_format == DATA_FORMATS.AJAX:
+        if response_format == DATA_FORMATS.AJAX or \
+           response_format == DATA_FORMATS.NONE:
             header["Accept"] = "application/json, text/javascript, */*; q=0.01"
         if response_format == DATA_FORMATS.TARBALL:
             pass  # No header needed
@@ -140,12 +142,12 @@ class EdXConnection(object):
     def ajax(self,
              url,
              payload=None,
+             files=None,
              response_format=DATA_FORMATS.AJAX,
              request_format=DATA_FORMATS.AJAX,
              method=METHODS.POST):
         '''
-        Make an AJAX call. This expects both the request and response to be
-        JSON.
+        Make an AJAX call to edX.
         '''
         (headers, cookies) = self.compile_header(
             response_format=response_format,
@@ -155,10 +157,15 @@ class EdXConnection(object):
            method != METHODS.GET:
             payload = json.dumps(payload)
         if method == METHODS.POST:
+            kwargs = {}
+            if payload:
+                kwargs['data'] = payload
+            if files:
+                kwargs['files'] = payload
             r = requests.post(self.server+url,
-                              data=payload,
                               cookies=cookies,
-                              headers=headers)
+                              headers=headers,
+                              **kwargs)
         elif method == METHODS.GET:
             if payload:
                 print payload
@@ -168,36 +175,37 @@ class EdXConnection(object):
                              headers=headers)
 
         if response_format == DATA_FORMATS.AJAX:
+            print r.text
             return json.loads(r.text)
         return r
-        print r.text
+
 
     def create_course(self,
-                      course_name='Sample course',
-                      course_org='edx',
-                      course_number='101',
-                      course_run=str(datetime.today().year)):
+                      course,
+                      course_name):
         '''
         Make a new edX course
         '''
         print "Creating", course_name
         url = "/course/"
-        payload = {"org": course_org,
-                   "number": course_number,
-                   "display_name": course_name,
-                   "run": course_run}
+        payload = {"org": course.org,
+                   "number": course.number,
+                   "run": course.run,
+                   "display_name": course_name}
         r = self.ajax(url, payload)
-        print r.text
 
     def add_author_to_course(self,
-                             course_name,
+                             course,
                              author_email):
-        print "Adding", author_email, "to", course_slug
-        url = "course_team/{course}/{author_email}"
-        url = url.format(course=course,
+        print "Adding", author_email, "to", course.course_string()
+        url = "/course_team/{course}/{author_email}"
+        url = url.format(course=course.course_string(),
                          author_email=author_email)
         payload = {"role": "instructor"}
-        r = requests.post(url, payload)
+        r = self.ajax(url,
+                      payload=payload,
+                      response_format=DATA_FORMATS.NONE)
+        print r, r.text
 
     def download_course(self, course, filepointer, close=True):
         '''
@@ -216,3 +224,14 @@ class EdXConnection(object):
                 filepointer.write(chunk)
         if close:
             filepointer.close()
+
+    def upload_course(self, course, filepointer):
+        url = "/import/{course}"
+        url = url.format(course = course.course_string())
+        files = {'course-data': ("course.tar.gz",
+                                 filepointer.read(),
+                                 "application/gzip",
+                                 {})}
+        r = self.ajax(url,
+                      files=files,
+                      request_format=DATA_FORMATS.TARBALL)
