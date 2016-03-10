@@ -1,16 +1,6 @@
 '''
-This is a set of scripts which help us make REST calls into edX Studio APIs.
-
-The APIs used are not official edX-supported APIs
-
-The code is not production-quality. It needs test cases and error handling.
-At the very least, it should have a quick look-see at HTTP response status
-codes.
-
-But at least downloading courses seems to work. I'll check the rest as
-time goes on.
+This file contains the library, for now.
 '''
-
 from datetime import datetime
 import json
 import os
@@ -179,7 +169,6 @@ class EdXConnection(object):
             return json.loads(r.text)
         return r
 
-
     def create_course(self,
                       course,
                       course_name):
@@ -227,7 +216,7 @@ class EdXConnection(object):
 
     def upload_course(self, course, filepointer):
         url = "/import/{course}"
-        url = url.format(course = course.course_string())
+        url = url.format(course=course.course_string())
         files = {'course-data': ("course.tar.gz",
                                  filepointer.read(),
                                  "application/gzip",
