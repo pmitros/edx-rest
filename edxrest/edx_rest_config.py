@@ -1,12 +1,6 @@
 import json
 import os.path
 
-omit = [
-    'course/info/updates.html',
-    'course/info/updates.items.json',
-    'course/about/overview.html'
-]
-
 csrf = raw_input("CSRF Token: ")
 session = raw_input("Session: ")
 
