@@ -55,4 +55,20 @@ for num in course_nums:
         print member.name
         tf.extract(member)
 
+fp = open("course/course.xml", "w")
+header = """<?xml version="1.0" ?>
+<course advanced_modules="[&quot;done&quot;, &quot;recommender&quot;, &quot;poll&quot;, &quot;word_cloud&quot;]">
+<chapter url_name="Papers" display_name="Papers">"""
+footer = """</chapter>
+</course>
+"""
+fp.write(header)
+fp.write("\n".join(['<sequential url_name="{num}"'.format(num=num)
+                    for num in course_nums])
+fp.write(footer)
+
+fp.close()
+
 print "Duplicates:", duplicates
+print "(There should be no duplicates; "
+print "if there are, you need to manually fix something)"
