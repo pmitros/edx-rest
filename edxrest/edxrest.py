@@ -14,6 +14,7 @@ from collections import namedtuple
 # Sessions are stored in cookies. Each server can have its own cookie
 # for this. We just set all the possible ones.
 sessionid_strings = ["sessionid",
+                     "prod-edx-sessionid",
                      "prod-edge-sessionid"]
 
 # Ditto for CSRF tokens
@@ -123,10 +124,10 @@ class EdXConnection(object):
         if response_format == DATA_FORMATS.TARBALL:
             pass  # No header needed
         if request_format == 'ajax':
-            header["Content-Type"] = "application/json; charset=UTF-8",
+            header["Content-Type"] = "application/json; charset=UTF-8"
 
         # And more CSRF protection -- we do need the referer
-        header["Referer"] = self.server + "/course",
+        header["Referer"] = self.server + "/course"
         return (header, cookies)
 
     def ajax(self,
@@ -160,9 +161,13 @@ class EdXConnection(object):
             if payload:
                 print payload
                 raise "Payload doesn't work with get"
-            r = requests.get(self.server+url,
-                             cookies=cookies,
-                             headers=headers)
+            print cookies
+            print headers
+            r = requests.get(
+                self.server+url,
+                cookies=cookies,
+                headers=headers
+            )
 
         if response_format == DATA_FORMATS.AJAX:
             print r.text
@@ -204,7 +209,13 @@ class EdXConnection(object):
         '''
         (headers, cookies) = self.compile_header()
         url = "/export/{course}?_accept=application/x-tgz"
-        url = url.format(course=course.course_string())
+        if isinstance(course, EdXCourse):
+            course_string = course.course_string()
+        elif isinstance(course, basestring):
+            course_string = course
+        else:
+            raise ValueError("Unrecognized course type: "+repr(course))
+        url = url.format(course=course_string)
         r = self.ajax(url,
                       response_format=DATA_FORMATS.TARBALL,
                       method=METHODS.GET)
